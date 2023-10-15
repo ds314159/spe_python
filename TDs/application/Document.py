@@ -1,4 +1,4 @@
-from datetime import datetime, date
+from datetime import datetime
 
 
 class Document:
@@ -6,7 +6,7 @@ class Document:
     def __init__(self, titre, auteur, date, url, texte):
         self.titre = titre
         self.auteur = auteur
-        self.date = datetime.strptime(date, "%Y-%m-%d").date()
+        self.date = datetime.strptime(date, "%Y-%m-%d %H:%M:%S").date()
         self.url = url
         self.texte = texte
 
