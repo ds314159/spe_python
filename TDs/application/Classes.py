@@ -152,7 +152,23 @@ class Corpus:
         current_auteur.add(doc)
 
     def __repr__(self):
-        return print(f"Corpus '{self.nom}' contenant {self.ndoc} documents et {self.naut} auteurs.")
+        return f"Corpus '{self.nom}' contenant {self.ndoc} documents et {self.naut} auteurs."
+
+    def __repr__html(self):
+        # Commencer par une chaîne de caractères contenant le début de la table HTML
+        html = f"<h3>Corpus: {self.nom}</h3>"
+        html += "<table border='1'>"
+        html += "<tr><th>Titre</th><th>Auteur</th><th>Date</th><th>URL</th><th>Extrait</th></tr>"
+
+        # Pour chaque document, ajouter une ligne au tableau HTML
+        for doc in self.id2doc.values():
+            html += f"<tr><td>{doc.titre}</td><td>{doc.auteur}</td><td>{doc.date}</td><td><a href='{doc.url}'>Lien</a></td><td>{doc.texte[:100]}...</td></tr>"
+
+        # Terminer la table HTML
+        html += "</table>"
+
+        # Retourner la chaîne de caractères HTML
+        return html
 
     def documents_par_date(self, n):
         # Trier les documents par date puis par titre
