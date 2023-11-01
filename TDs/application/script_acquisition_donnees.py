@@ -2,11 +2,12 @@ import praw
 import json
 import xmltodict
 import urllib.request as libreq
-import datetime
+from datetime import datetime as dt
 import os
 import stat
 import pandas as pd
-
+from Corpus import Corpus as Cor
+from Document import *
 
 # *********************************************************************************************************************
 # ********************************** Explorer REDDIT ******************************************************************
@@ -44,7 +45,7 @@ for post in new_posts:
     print('URL : \n', post.url)
     print('SCORE : \n', post.score)  # votes positifs mins votes negatifs
     print('COMMENTS COUNT : \n', post.num_comments)
-    print('CREATED : \n', datetime.datetime.utcfromtimestamp(post.created_utc))  # convertir en format lisible
+    print('CREATED : \n', dt.utcfromtimestamp(post.created_utc))  # convertir en format lisible
     print('\n')
 
 # exploration par identifiant unique
@@ -106,7 +107,7 @@ for post in reddit_recherche:
         'id_post_reddit': post.id,
         'titre': post.title,
         'auteur': post.author.name if post.author else 'N/A',
-        'date': datetime.datetime.utcfromtimestamp(post.created_utc),
+        'date': dt.utcfromtimestamp(post.created_utc),
         'texte': post.selftext,
         'url': post.url,
         'subreddit': post.subreddit.display_name,
@@ -118,9 +119,9 @@ for post in reddit_recherche:
     })
 
 df_reddit = pd.DataFrame(data_reddit)
-df_reddit.to_csv('reddit_posts.csv', index=False, encoding='utf-8', sep='\t')
-st = os.stat('reddit_posts.csv')
-os.chmod('reddit_posts.csv', st.st_mode | stat.S_IWRITE | stat.S_IREAD)
+df_reddit.to_csv('data/reddit_posts.csv', index=False, encoding='utf-8', sep='\t')
+st = os.stat('data/reddit_posts.csv')
+os.chmod('data/reddit_posts.csv', st.st_mode | stat.S_IWRITE | stat.S_IREAD)
 
 
 
@@ -160,7 +161,7 @@ for entry in articles:
         'titre': entry['title'],
         'auteur': auteur_principal,
         'co_auteurs': co_auteurs,
-        'date': datetime.datetime.strptime(entry['published'], '%Y-%m-%dT%H:%M:%SZ').strftime('%Y-%m-%d %H:%M:%S'),
+        'date': dt.strptime(entry['published'], '%Y-%m-%dT%H:%M:%SZ').strftime('%Y-%m-%d %H:%M:%S'),
         'texte': entry['summary'],
         'url': link_url,
         'catégorie': 'cs',
@@ -171,18 +172,23 @@ for entry in articles:
 df_arxiv = pd.DataFrame(data_arxiv)
 
 # Sauvegarder le DataFrame au format CSV
-df_arxiv.to_csv('arxiv_articles.csv', index=False, encoding='utf-8', sep='\t')
-st = os.stat('arxiv_articles.csv')
-os.chmod('arxiv_articles.csv', st.st_mode | stat.S_IWRITE | stat.S_IREAD)
+df_arxiv.to_csv('data/arxiv_articles.csv', index=False, encoding='utf-8', sep='\t')
+st = os.stat('data/arxiv_articles.csv')
+os.chmod('data/arxiv_articles.csv', st.st_mode | stat.S_IWRITE | stat.S_IREAD)
 
 # ********************************** Fusion et traitement initial des données des deux sources *************************
 
-df_arxiv = pd.read_csv('arxiv_articles.csv', sep='\t')
-df_reddit = pd.read_csv('reddit_posts.csv', sep='\t')
+df_arxiv = pd.read_csv('data/arxiv_articles.csv', sep='\t')
+df_reddit = pd.read_csv('data/reddit_posts.csv', sep='\t')
 
 # fusion:
 
 df_unified = pd.concat([df_arxiv, df_reddit], ignore_index=True, sort=False)
+
+# traitement pour affecter une valeur par defaut à des colonnes utiles
+
+df_unified['nombre_commentaires'] = df_unified['nombre_commentaires'].fillna(-1)
+df_unified['co_auteurs']  = df_unified['co_auteurs'].fillna('inexistant')
 
 # traitement pour épurer le texte et rajouter les colonnes nombre de mots et de phrases par contenu:
 
@@ -191,9 +197,9 @@ df_unified["nombre_de_mots"] = df_unified['texte'].apply(lambda x: len(x.split('
 df_unified["nombre_de_phrases"] = df_unified['texte'].apply(lambda x: len(x.split('.')) if isinstance(x, str) else 0)
 df_unified = df_unified[df_unified['texte'].str.len() > 20]
 
-df_unified.to_csv('corpus.csv', index=False, encoding='utf-8', sep='\t')
-st = os.stat('corpus.csv')
-os.chmod('corpus.csv', st.st_mode | stat.S_IWRITE | stat.S_IREAD)
+df_unified.to_csv('data/corpus.csv', index=False, encoding='utf-8', sep='\t')
+st = os.stat('data/corpus.csv')
+os.chmod('data/corpus.csv', st.st_mode | stat.S_IWRITE | stat.S_IREAD)
 
 # récupérer le sac de mots et le stocker :
 
@@ -201,3 +207,19 @@ sac_de_mots = ''.join(df_unified['texte'])
 
 with open('sac_de_mots.txt', 'w', encoding='utf-8') as file:
     file.write(sac_de_mots)
+
+# récupérer notre enregistrement corpus (l'ensemble de nos docs)
+corpus_articles = DocumentFactory.create_corpus("data/corpus.csv", "arxiv et reddit")
+corpus_articles.save('data/corpus_articles.pkl')
+
+
+corpus = Cor.load('data/corpus_articles.pkl')
+
+
+for _, doc in corpus.id2doc.items():
+    doc.afficher_infos()
+
+
+
+
+

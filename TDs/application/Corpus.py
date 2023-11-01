@@ -1,5 +1,6 @@
-from Document import Document
+from Document import Document, DocumentFactory
 from Author import Author
+from Document import *
 import pickle
 class Corpus:
 
@@ -10,9 +11,10 @@ class Corpus:
         self.ndoc = 0  # Comptage des documents
         self.naut = 0  # Comptage des auteurs
 
-    def add_document(self, titre, auteur, date, url, texte):
+    def add_document(self,source ,titre, auteur, date, url, texte, co_auteurs, nb_commentaires=0):
         # Créer une nouvelle instance de Document
-        doc = Document(titre, auteur, date, url, texte)
+
+        doc = DocumentFactory.create_document(source ,titre, auteur, date, url, texte, co_auteurs, nb_commentaires)
 
         # Ajouter le document à id2doc
         self.id2doc[titre] = doc
@@ -30,7 +32,7 @@ class Corpus:
             # Si l'auteur existe déjà, récupérer l'instance existante
             current_auteur = self.authors[auteur]
 
-        # Utiliser la méthode "add" de l'instanc pour ajouter le document à sa production
+        # Utiliser la méthode "add" de l'instance pour ajouter le document à sa production
         current_auteur.add(doc)
 
     def __repr__(self):
