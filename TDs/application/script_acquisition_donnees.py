@@ -6,8 +6,8 @@ from datetime import datetime as dt
 import os
 import stat
 import pandas as pd
-from Corpus import Corpus as Cor
-from Document import *
+from Classes import Corpus as Cor
+from Classes import *
 
 # *********************************************************************************************************************
 # ********************************** Explorer REDDIT ******************************************************************

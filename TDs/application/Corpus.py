@@ -1,6 +1,4 @@
-from Document import Document, DocumentFactory
-from Author import Author
-from Document import *
+from Document import  DocumentFactory
 import pickle
 class Corpus:
 

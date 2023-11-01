@@ -2,10 +2,12 @@ import praw
 import json
 import xmltodict
 import urllib.request as libreq
+from urllib.parse import quote_plus
 from datetime import datetime as dt
 import os
 import pandas as pd
-from Document import DocumentFactory
+from Classes import *
+
 
 
 def charger_config_json(chemin):
@@ -41,11 +43,12 @@ def creer_dataframe_reddit(posts):
     return pd.DataFrame(data_reddit)
 
 
-def recuperer_articles_arxiv(mot_de_recherche, taille):
+def recuperer_articles_arxiv(sequence_de_recherche, taille):
+    contenu = quote_plus(sequence_de_recherche) # contrairement à praw, dans xreddit il faut formater la sequence afin qu'il n'y ait pas d'espaces
     cible = 'all'
     cible_exclusion = 'ti'
     contenu_exclusion = 'monkey' # exemple insignifiant, juste pour tester la variable exclusion
-    requete_arxiv = f"http://export.arxiv.org/api/query?search_query={cible}:{mot_de_recherche}+ANDNOT+%28{cible_exclusion}:{contenu_exclusion}%29&start=0&max_results={taille}"
+    requete_arxiv = f"http://export.arxiv.org/api/query?search_query={cible}:{contenu}+ANDNOT+%28{cible_exclusion}:{contenu_exclusion}%29&start=0&max_results={taille}"
     with libreq.urlopen(requete_arxiv) as url:
         return xmltodict.parse(url.read())
 
@@ -71,7 +74,7 @@ def creer_dataframe_arxiv(parsed_xml):
 
 
 def appliquer_recherche(nom_corpus, mot_de_recherche, taille_par_source):
-    config = charger_config_json()
+    config = charger_config_json('config.json')
     reddit = initialiser_reddit(config)
 
     posts_reddit = recuperer_posts_reddit(reddit, mot_de_recherche, taille_par_source)
@@ -96,8 +99,10 @@ def appliquer_recherche(nom_corpus, mot_de_recherche, taille_par_source):
 
 # Exemple d'appel de la fonction
 if __name__ == "__main__":
-    nom_corpus = "exemple_corpus"
-    mot_de_recherche = "quantum computing"
+    nom_corpus = "python"
+    mot_de_recherche = "python"
     taille_par_source = 100
     corpus_articles = appliquer_recherche(nom_corpus, mot_de_recherche, taille_par_source)
-    # Utiliser `corpus_articles` pour d'autres traitements...
+
+
+    ex = Corpus.load('data/python.pkl')
