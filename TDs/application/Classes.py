@@ -1,8 +1,7 @@
 from datetime import datetime
 import pandas as pd
-
-
 import pickle
+import re
 
 ########################################################################################################################
 class Author:
@@ -41,7 +40,7 @@ class Document:
         return self.titre
 
 
-
+########################################################################################################################
 class RedditDocument(Document):
 
     def __init__(self, source, titre, auteur, date, url, texte, nb_commentaires):
@@ -63,7 +62,7 @@ class RedditDocument(Document):
         super().afficher_infos()
         print(f"Nombre de commentaires: {self.nb_commentaires}")
 
-
+########################################################################################################################
 class ArxivDocument(Document):
 
     def __init__(self, source, titre, auteur, date, url, texte, co_auteurs):
@@ -86,7 +85,7 @@ class ArxivDocument(Document):
         print(f"Co-auteurs: {self.co_auteurs}" if self.co_auteurs else "Co_auteurs: aucun")
 
 
-
+########################################################################################################################
 class DocumentFactory:
 
     @staticmethod
@@ -126,6 +125,7 @@ class Corpus:
         self.id2doc = {}  # Dictionnaire des documents
         self.ndoc = 0  # Comptage des documents
         self.naut = 0  # Comptage des auteurs
+        self.texte_concatene = None # sera acquis au premier appel de la fonction search
 
     def add_document(self,source ,titre, auteur, date, url, texte, co_auteurs, nb_commentaires=0):
         # Créer une nouvelle instance de Document
@@ -217,3 +217,112 @@ class Corpus:
         """
         with open(filename, 'rb') as file:
             return pickle.load(file)
+
+    def concatener_textes(self):
+        if self.texte_concatene is None:
+            self.texte_concatene = ' '.join([doc.texte for doc in self.id2doc.values()])
+
+    def search(self, mot_clef):
+
+        self.concatener_textes()
+
+        # Utilisez re.findall pour trouver toutes les occurrences du mot-clé
+        return re.findall(mot_clef, self.texte_concatene)
+
+    def concorde(self, expression, taille_contexte):
+        # s'ssurez-vous que les textes sont concaténés
+        self.concatener_textes()
+
+        # Trouver toutes les occurrences de l'expression
+        pattern = re.compile(r'(.{{0,{0}}})({1})(.{{0,{0}}})'.format(taille_contexte, expression))
+        matches = pattern.finditer(self.texte_concatene)
+
+        # Créer un DataFrame pour stocker les résultats
+        concordances = pd.DataFrame(columns=['contexte gauche', 'motif trouvé', 'contexte droit'])
+
+        # Remplir le DataFrame avec les résultats
+        for match in matches:
+            concordances = concordances.append({
+                'contexte gauche': match.group(1),
+                'motif trouvé': match.group(2),
+                'contexte droit': match.group(3)
+            }, ignore_index=True)
+
+        return concordances
+
+    def nettoyer_texte(self, texte):
+        """
+        Nettoie le texte en appliquant plusieurs traitements.
+
+        Args:
+            texte (str): Le texte à nettoyer.
+
+        Returns:
+            str: Le texte nettoyé.
+        """
+        # Conversion en minuscules
+        texte_concatene = texte.lower()
+
+        # Remplacement des sauts de ligne par des espaces
+        texte = texte.replace('\n', ' ')
+
+        # Suppression de la ponctuation
+        # tous les caractères qui ne sont ni des lettres, ni des chiffres, ni des caractères de soulignement, ni des espaces (y compris les tabulations et les retours à la ligne). En pratique, cela revient principalement à sélectionner la ponctuation et les symboles spéciaux.
+        texte = re.sub(r'[^\w\s]', '', texte)
+
+        return texte
+
+    def construire_vocabulaire(self):
+        """
+        Construit le vocabulaire à partir des textes de tous les documents du corpus.
+
+        Returns:
+            dict: Un dictionnaire avec chaque mot unique et son nombre d'occurrences.
+        """
+        vocabulaire = set()
+
+        # Boucler sur chaque document et extraire les mots
+        for doc in self.id2doc.values():
+            # Nettoyer le texte (en utilisant la fonction nettoyer_texte si elle est définie)
+            texte_nettoye = self.nettoyer_texte(doc.texte)
+
+            # Séparer les mots en utilisant l'espace, la tabulation, et la ponctuation comme délimiteurs
+            mots = re.findall(r'\b\w+\b', texte_nettoye)
+
+            # Ajouter les mots au set vocabulaire
+            vocabulaire.update(mots)
+
+        # Convertir le set en dictionnaire avec le compte des occurrences
+        vocabulaire_dict = {index: mot for index, mot in enumerate(vocabulaire)}
+
+
+        return vocabulaire_dict
+
+    def calculer_frequences(self, vocabulaire_dict):
+        term_freq = {mot: 0 for mot in vocabulaire_dict.values()}
+        doc_freq = {mot: 0 for mot in vocabulaire_dict.values()}
+
+        for doc in self.id2doc.values():
+            # Nettoyage et extraction des mots
+            texte_nettoye = self.nettoyer_texte(doc.texte)
+            mots = re.findall(r'\b\w+\b', texte_nettoye)
+            mots_uniques = set()
+
+            for mot in mots:
+                if mot in term_freq:
+                    # Mise à jour de la fréquence des termes
+                    term_freq[mot] += 1
+
+            for mot in set(mots):
+                if mot in doc_freq:
+                    # Mise à jour de la fréquence des documents
+                    doc_freq[mot] += 1
+
+        # Création d'un DataFrame pour les résultats
+        freq_df = pd.DataFrame({
+            'Mot': list(term_freq.keys()),
+            'Term Frequency': list(term_freq.values()),
+            'Document Frequency': [doc_freq[mot] for mot in term_freq.keys()]
+        })
+
+        return freq_df
