@@ -2,6 +2,8 @@ from datetime import datetime
 import pandas as pd
 import pickle
 import re
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
 ########################################################################################################################
 class Author:
@@ -220,7 +222,7 @@ class Corpus:
 
     def concatener_textes(self):
         if self.texte_concatene is None:
-            self.texte_concatene = ' '.join([doc.texte for doc in self.id2doc.values()])
+            self.texte_concatene = ' '.join([str(doc.texte) if doc.texte is not None else '' for doc in self.id2doc.values()])
 
     def search(self, mot_clef):
 
@@ -260,8 +262,14 @@ class Corpus:
         Returns:
             str: Le texte nettoyé.
         """
+        # s'assurer de bien transmettre une chaine de texte
+        if not isinstance(texte, str):
+            texte = str(texte)
+        # suppression des nombres
+        texte = re.sub(r'\d+', '', texte)
+
         # Conversion en minuscules
-        texte_concatene = texte.lower()
+        texte = texte.lower()
 
         # Remplacement des sauts de ligne par des espaces
         texte = texte.replace('\n', ' ')
@@ -299,30 +307,93 @@ class Corpus:
         return vocabulaire_dict
 
     def calculer_frequences(self, vocabulaire_dict):
-        term_freq = {mot: 0 for mot in vocabulaire_dict.values()}
-        doc_freq = {mot: 0 for mot in vocabulaire_dict.values()}
+        # Créer un dictionnaire pour stocker les fréquences des termes dans chaque document
+        freq_par_doc = {doc.titre: {mot: 0 for mot in vocabulaire_dict.values()} for doc in self.id2doc.values()}
 
         for doc in self.id2doc.values():
             # Nettoyage et extraction des mots
             texte_nettoye = self.nettoyer_texte(doc.texte)
             mots = re.findall(r'\b\w+\b', texte_nettoye)
-            mots_uniques = set()
 
+            # Compter les fréquences des mots pour ce document
             for mot in mots:
-                if mot in term_freq:
-                    # Mise à jour de la fréquence des termes
-                    term_freq[mot] += 1
+                if mot in freq_par_doc[doc.titre]:
+                    freq_par_doc[doc.titre][mot] += 1
 
-            for mot in set(mots):
-                if mot in doc_freq:
-                    # Mise à jour de la fréquence des documents
-                    doc_freq[mot] += 1
-
-        # Création d'un DataFrame pour les résultats
-        freq_df = pd.DataFrame({
-            'Mot': list(term_freq.keys()),
-            'Term Frequency': list(term_freq.values()),
-            'Document Frequency': [doc_freq[mot] for mot in term_freq.keys()]
-        })
+        # Transformer le dictionnaire en DataFrame pour une meilleure lisibilité
+        freq_df = pd.DataFrame.from_dict(freq_par_doc, orient='index')
 
         return freq_df
+
+    def calculer_frequences_2(self, vocabulaire_dict):
+        # Créer un dictionnaire pour stocker les fréquences des termes dans chaque document
+        freq_par_doc = {index: {mot: 0 for mot in vocabulaire_dict.values()} for index, doc in
+                        enumerate(self.id2doc.values())}
+
+        for index, doc in enumerate(self.id2doc.values()):
+            # Nettoyage et extraction des mots
+            texte_nettoye = self.nettoyer_texte(doc.texte)
+            mots = re.findall(r'\b\w+\b', texte_nettoye)
+
+            # Compter les fréquences des mots pour ce document spécifique
+            for mot in mots:
+                if mot in vocabulaire_dict.values():  # Assurez-vous que le mot est dans le vocabulaire
+                    freq_par_doc[index][mot] += 1
+
+        # Transformer le dictionnaire en DataFrame pour une meilleure lisibilité
+        freq_df = pd.DataFrame.from_dict(freq_par_doc, orient='index')
+
+        return freq_df
+
+    def vectoriser_documents(self):
+        """
+        Vectorise les documents du corpus en utilisant TF-IDF.
+        """
+        # Assurez-vous que les textes sont concaténés
+        self.concatener_textes()
+
+        # Initialiser le vectoriseur TF-IDF
+        self.vectorizer = TfidfVectorizer()
+
+        # Créer une liste de tous les textes des documents
+        documents = [str(doc.texte) if doc.texte is not None else '' for doc in self.id2doc.values()]
+
+        # Vectoriser les documents
+        self.tfidf_matrix = self.vectorizer.fit_transform(documents)
+
+    def rechercher_documents(self, requete):
+        """
+        Recherche les documents pertinents basés sur une requête multi-mots.
+
+        Args:
+            requete (str): La requête de recherche entrée par l'utilisateur.
+
+        Returns:
+            DataFrame: Un DataFrame contenant les documents triés par pertinence.
+        """
+        # Vérifiez si les documents ont été vectorisés
+        if not hasattr(self, 'tfidf_matrix'):
+            self.vectoriser_documents()
+
+        # Nettoyer et vectoriser la requête
+        requete_vectorisee = self.vectorizer.transform([requete])
+
+        # Calculer la similarité cosinus
+        cos_similarities = cosine_similarity(requete_vectorisee, self.tfidf_matrix)
+
+        # Récupérer les scores de similarité pour chaque document
+        scores = cos_similarities[0]
+
+        # Créer un DataFrame pour les résultats
+        resultats = pd.DataFrame({
+            'Document': [doc.titre for doc in self.id2doc.values()],
+            'Score': scores
+        })
+
+        # Trier les résultats par score de similarité
+        resultats_ordonnes = resultats.sort_values(by='Score', ascending=False)
+
+        return resultats_ordonnes
+
+
+
